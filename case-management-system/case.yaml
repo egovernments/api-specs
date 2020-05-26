@@ -20,12 +20,12 @@ tags:
   description: Allows update of fields such as status, extension of endDate etc; accessible to a case manager.
 - name: Search
   description: Search cases using a combination of parameters, to be accessible to case managers and other administrative authorities. Searches are only possible on the whole values, partial searches aren't allowed
-- name: Activity
+- name: HealthDetail
   description: Captures activity / events pertaining to a case; updates could be from end-users or case workers performing on behalf of the user
 
 paths:
 
-  /_create:
+  /case/_create:
     post:
       tags:
       - Create
@@ -57,7 +57,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorRes'
 
-  /_update:
+  /case/_update:
     post:
       tags:
       - Update
@@ -73,7 +73,6 @@ paths:
                 RequestInfo:
                   $ref: '#/components/schemas/RequestInfo'
                 case:
-                  type: object
                   $ref: '#/components/schemas/UpdateCase'
               required: 
                 - RequestInfo
@@ -89,7 +88,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorRes'
 
-  /_search:
+  /case/_search:
     post:
       tags:
       - Search
@@ -108,20 +107,29 @@ paths:
                   description: Namespaced Tenant id of the municipal authority tracking / creating the case
                   type: string
                   maxLength: 128
-                name:
-                  description: Name of the person
-                  maxLength: 256
-                  type: integer
-                  example: John Doe          
                 mobileNumber:
                   description: mobile number of the person this case is being tracked
                   pattern: ^\d{10}$
                   type: string
                   example: 9999999999  
+                name:
+                  description: Name of the person. Pelase note that a exact search will be performed on teh name provided. 
+                  maxLength: 256
+                  type: integer
+                  example: John Doe
+                caseId:
+                  description: System assigned case id of the case  
+                  maxLength: 64
+                  type: string
+                  example: "CASE-001"
+                uuid:
+                  description: System generated Machine Readable UUID of the case 
+                  maxLength: 64
+                  type: string
+                  example: "8142fca5-2681-4360-9a5c-1440bd3916ef" 
               required: 
                 - RequestInfo
                 - mobileNumber
-                - name
                 - tenantId
         required: true
       responses:
@@ -136,9 +144,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Case'
-                required: 
-                  - case                 
-                  
         default:
           description: Request failed
           content:
@@ -146,10 +151,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       
-  /_activity:
+  /healthdetail/_create:
     post:
       tags:
-      - Activity
+      - HealthDetail
       summary: Track daily activities or events pertaining to a case
       operationId: activity
       requestBody:
@@ -178,7 +183,7 @@ paths:
                 caseDetails:
                   type: array
                   items: 
-                    $ref: '#/components/schemas/CaseDetails'
+                    $ref: '#/components/schemas/HealthDetails'
               required: 
                 - RequestInfo
                 - tenantId
@@ -204,18 +209,19 @@ components:
       - name
       - age
       - tenantId
-      - endDate
+      - startDate
       - reason
       type: object
+      description: Isolation case deatils - User and Daily Health Paramerter Deetails. TODO - Should it extend teh User from eGov DIGIT user's schema? 
       properties:
         tenantId:
-          description: Namespaced Tenant id of the municipal authority tracking / creating the case
+          description: Namespaced Tenant id of the authority tracking / creating the case. Based on the need teh tenants can be setup at state/district/city/town level
           type: string
           maxLength: 128
         name:
           description: Name of the person
           maxLength: 256
-          type: integer
+          type: string
           example: John Doe          
         mobileNumber:
           description: mobile number of the person this case is being tracked
@@ -235,15 +241,16 @@ components:
           format: date-time
         endDate:
           description: Timestamp (as per RFC3339 format) upto which the case is to be tracked
+            TODO - enddate can be thought of as readOnly based on a config number of days (startDate + config Number of days), OR can be demanded in the call - need to think more about it in tomorrow's call. 
           type: string
           format: date-time 
         reason:
-          description: This field captures the reason for which the case is created
+          description: This field captures the reason for which the case is created. TODO - Need to amke this field as an enum? 
           maxLength: 256
           type: string
           example: Travel History
         medicalHistory:
-          description: Existing medical histories which can complicate the case
+          description: Existing medical histories of the person. TODO - thsi will need to be multiselect 
           type: string
           enum:
           - Diabetes
@@ -256,20 +263,21 @@ components:
           type: object     
         status:
           type: string
+          readOnly: true
           description: Depicts the current status of the case
           enum:
           - active
-          - covid_negative
+          - isolation_completed
           - covid_positive
           - cancelled
-          example: covid_negative      
-        caseDetails:
+          example: active      
+        healthDetails:
           type: array
           readOnly: true
           items: 
-            $ref: '#/components/schemas/CaseDetails'          
+            $ref: '#/components/schemas/HealthDetails'          
         caseId:
-          description: System generated caseId
+          description: System generated human readable caseId
           maxLength: 64
           type: string
           readOnly: true
@@ -279,7 +287,24 @@ components:
           maxLength: 64
           type: string
           readOnly: true
-          example: "8142fca5-2681-4360-9a5c-1440bd3916ef"           
+          example: "8142fca5-2681-4360-9a5c-1440bd3916ef" 
+        signature:
+          $ref: '#/components/schemas/Signature'
+          
+    Signature:
+      description: Digital signature details for the pass object
+      type: object
+      readOnly: true
+      properties:
+        certUrl: 
+          type: string
+          maxLength: 128
+          description: HTTP url to download the digital certificate or public key to validate teh signature on the pass
+          format: url
+          example: http://myserver.com/epass/tenant1/signingcert
+        signedJWT:
+          type: string
+          description: JWT signature on Case Object minus the signature (this) field of the case object
           
     UpdateCase:
       required:     
@@ -316,15 +341,13 @@ components:
           type: object     
         status:
           type: string
-          description: Depicts the current status of the case
+          description: Depicts the current status of the case. Case can only be updated to cancelled and covid_positive by the admins. Isolation completed should be a system calculated inference.  
           enum:
-          - active
-          - covid_negative
           - covid_positive
           - cancelled
-          example: covid_negative          
+          example: cancelled          
           
-    CaseDetails:
+    HealthDetails:
       type: object
       properties:       
         temperature:
@@ -332,14 +355,18 @@ components:
           type: number
           example: 98.6
         symptoms:
-          description: Symptoms you are currently experiencing
+          description: Symptoms you are currently experiencing, this can be an array of the symptoms from a proviede enum
           maxLength: 256
-          type: string
+          type: array
+          items: 
+            type: string
           example: None
           
     RequestInfo:
       type: object
       description: RequestInfo should be used to carry meta information about the requests to the server as described in the fields below. All eGov APIs will use requestinfo as a part of the request body to carry this meta information. Some of this information will be returned back from the server as part of the ResponseInfo in the response body to ensure correlation.
+        
+        TODO - can we refer this from eGov common schema? 
       properties:
         apiId:
           type: string
@@ -390,6 +417,8 @@ components:
     ErrorRes:
       type: object
       description: All APIs will return ErrorRes in case of failure which will carry ResponseInfo as metadata and Error object as actual representation of error. In case of bulk apis, some apis may chose to return the array of Error objects to indicate individual failure.
+      
+        TODO - can we refer this from eGov common schema?
       properties:
         Errors:
           description: Error response array corresponding to Request Object array. In case of single object submission or _search related paths this may be an array of one error element
@@ -403,6 +432,8 @@ components:
     Error:
       type: object
       description: Error object will be returned as a part of reponse body in conjunction with ResponseInfo as part of ErrorResponse whenever the request processing status in the ResponseInfo is FAILED. HTTP return in this scenario will usually be HTTP 400. 
+      
+        TODO - can we refer this from eGov common schema?
       properties:
         code:
           type: string
