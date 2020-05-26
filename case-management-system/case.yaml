@@ -1,0 +1,423 @@
+openapi: 3.0.1
+info:
+  title: Case Management System
+  description: This is API definition for a Digit Case Management server. More details about the functionality can be found at [https://www.digit.org](https://www.digit.org)
+  termsOfService: https://digit.org
+  contact:
+    email: contact@egovernments.org
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.1
+
+servers:
+- url: https://egov-micro-dev.egovernments.org/case/v1
+
+tags:
+- name: Create
+  description: Validates details of the entity, and creates a case in the system with an unique Case ID. This is ideally to be used by a Case Manager.
+- name: Update
+  description: Allows update of fields such as status, extension of endDate etc; accessible to a case manager.
+- name: Search
+  description: Search cases using a combination of parameters, to be accessible to case managers and other administrative authorities. Searches are only possible on the whole values, partial searches aren't allowed
+- name: Activity
+  description: Captures activity / events pertaining to a case; updates could be from end-users or case workers performing on behalf of the user
+
+paths:
+
+  /_create:
+    post:
+      tags:
+      - Create
+      summary: Create a case, PII such as name, mobile number will be encrypted
+      operationId: createCase
+      requestBody:
+        description: This API allows creation of cases
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                case:
+                  type: object
+                  $ref: '#/components/schemas/Case'                
+              required:
+                - RequestInfo
+                - case
+        required: true
+      responses:
+        200:
+          description: Created
+        default:
+          description: Request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /_update:
+    post:
+      tags:
+      - Update
+      summary: Update a case, identifiers are mandatory , other fields are optional
+      operationId: updateCase
+      requestBody:
+        description: Performs updates to a case based on tenantId, mobileNumber and name. 
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                case:
+                  type: object
+                  $ref: '#/components/schemas/UpdateCase'
+              required: 
+                - RequestInfo
+                - case
+        required: true
+      responses:
+        200:
+          description: Succesfully Updated
+        default:
+          description: Request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+  /_search:
+    post:
+      tags:
+      - Search
+      summary: Search cases
+      operationId: searchCases
+      requestBody:
+        description: Search cases using combination of parameters. If multiple parameter values are provieded they will be treated as an "and" condition for the search. Searches are only possible on the whole values, partial searches aren't allowed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                tenantId:
+                  description: Namespaced Tenant id of the municipal authority tracking / creating the case
+                  type: string
+                  maxLength: 128
+                name:
+                  description: Name of the person
+                  maxLength: 256
+                  type: integer
+                  example: John Doe          
+                mobileNumber:
+                  description: mobile number of the person this case is being tracked
+                  pattern: ^\d{10}$
+                  type: string
+                  example: 9999999999  
+              required: 
+                - RequestInfo
+                - mobileNumber
+                - name
+                - tenantId
+        required: true
+      responses:
+        200:
+          description: Operation Succesful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:               
+                  cases:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Case'
+                required: 
+                  - case                 
+                  
+        default:
+          description: Request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      
+  /_activity:
+    post:
+      tags:
+      - Activity
+      summary: Track daily activities or events pertaining to a case
+      operationId: activity
+      requestBody:
+        description: Track daily activities or events pertaining to a case
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                RequestInfo:
+                  $ref: '#/components/schemas/RequestInfo'
+                tenantId:
+                  description: Namespaced Tenant id of the municipal authority tracking / creating the case
+                  type: string
+                  maxLength: 128
+                name:
+                  description: Name of the person
+                  maxLength: 256
+                  type: integer
+                  example: John Doe          
+                mobileNumber:
+                  description: mobile number of the person this case is being tracked
+                  pattern: ^\d{10}$
+                  type: string
+                  example: 9999999999                  
+                caseDetails:
+                  type: array
+                  items: 
+                    $ref: '#/components/schemas/CaseDetails'
+              required: 
+                - RequestInfo
+                - tenantId
+                - name
+                - mobileNumber
+                - caseDetails
+        required: true
+      responses:
+        200:
+          description: Succesfully Added
+        default:
+          description: Request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorRes'
+
+components:
+  schemas:
+    Case:
+      required:     
+      - mobileNumber
+      - name
+      - age
+      - tenantId
+      - endDate
+      - reason
+      type: object
+      properties:
+        tenantId:
+          description: Namespaced Tenant id of the municipal authority tracking / creating the case
+          type: string
+          maxLength: 128
+        name:
+          description: Name of the person
+          maxLength: 256
+          type: integer
+          example: John Doe          
+        mobileNumber:
+          description: mobile number of the person this case is being tracked
+          pattern: ^\d{10}$
+          type: string
+          example: 9999999999
+        age:
+          description: Age of the person
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100  
+          example: 54
+        startDate:
+          description: Timestamp (as per RFC3339 format) from which the case is being tracked
+          type: string
+          format: date-time
+        endDate:
+          description: Timestamp (as per RFC3339 format) upto which the case is to be tracked
+          type: string
+          format: date-time 
+        reason:
+          description: This field captures the reason for which the case is created
+          maxLength: 256
+          type: string
+          example: Travel History
+        medicalHistory:
+          description: Existing medical histories which can complicate the case
+          type: string
+          enum:
+          - Diabetes
+          - Hypertension
+          - Lung_Disease
+          - Heart_Disease
+          example: Diabetes 
+        additionalDetails:
+          description: Capture additional case related details 
+          type: object     
+        status:
+          type: string
+          description: Depicts the current status of the case
+          enum:
+          - active
+          - covid_negative
+          - covid_positive
+          - cancelled
+          example: covid_negative      
+        caseDetails:
+          type: array
+          readOnly: true
+          items: 
+            $ref: '#/components/schemas/CaseDetails'          
+        caseId:
+          description: System generated caseId
+          maxLength: 64
+          type: string
+          readOnly: true
+          example: "CASE-001"       
+        uuid:
+          description: System generated uuid
+          maxLength: 64
+          type: string
+          readOnly: true
+          example: "8142fca5-2681-4360-9a5c-1440bd3916ef"           
+          
+    UpdateCase:
+      required:     
+      - mobileNumber
+      - name
+      - tenantId
+      type: object
+      properties:
+        tenantId:
+          description: Namespaced Tenant id of the municipal authority tracking / creating the case
+          type: string
+          maxLength: 128   
+        name:
+          description: Name of the person
+          maxLength: 256
+          type: integer
+          example: John Doe   
+        mobileNumber:
+          description: mobile number of the person this case is being tracked
+          pattern: ^\d{10}$
+          type: string
+          example: 9999999999  
+        endDate:
+          description: Timestamp (as per RFC3339 format) upto which the case is to be tracked
+          type: string
+          format: date-time 
+        reason:
+          description: This field captures the reason for which the case is created
+          maxLength: 256
+          type: string
+          example: Travel History
+        additionalDetails:
+          description: Capture additional case related details 
+          type: object     
+        status:
+          type: string
+          description: Depicts the current status of the case
+          enum:
+          - active
+          - covid_negative
+          - covid_positive
+          - cancelled
+          example: covid_negative          
+          
+    CaseDetails:
+      type: object
+      properties:       
+        temperature:
+          description: Body temperature of the person in Fahrenheit
+          type: number
+          example: 98.6
+        symptoms:
+          description: Symptoms you are currently experiencing
+          maxLength: 256
+          type: string
+          example: None
+          
+    RequestInfo:
+      type: object
+      description: RequestInfo should be used to carry meta information about the requests to the server as described in the fields below. All eGov APIs will use requestinfo as a part of the request body to carry this meta information. Some of this information will be returned back from the server as part of the ResponseInfo in the response body to ensure correlation.
+      properties:
+        apiId:
+          type: string
+          description: unique API ID
+          maxLength: 128
+        ver:
+          type: string
+          description: API version - for HTTP based request this will be same as used in path
+          maxLength: 32
+        ts:
+          type: integer
+          format: int64
+          description: time in epoch
+        action:
+          type: string
+          description: API action to be performed like _create, _update, _search (denoting POST, PUT, GET) or _oauth etc
+          maxLength: 32
+        did:
+          type: string
+          description: Device ID from which the API is called
+          maxLength: 1024
+        key:
+          type: string
+          description: API key (API key provided to the caller in case of server to server communication)
+          maxLength: 256
+        msgId:
+          type: string
+          description: Unique request message id from the caller
+          maxLength: 256
+        requesterId:
+          type: string
+          description: UserId of the user calling
+          maxLength: 256
+        authToken:
+          type: string
+          description: //session/jwt/saml token/oauth token - the usual value that would go into HTTP bearer token
+        correlationId:
+          type: string
+          readOnly: true
+      required:
+        - apiId
+        - ver
+        - ts
+        - msgId
+        - action     
+        
+        
+    ErrorRes:
+      type: object
+      description: All APIs will return ErrorRes in case of failure which will carry ResponseInfo as metadata and Error object as actual representation of error. In case of bulk apis, some apis may chose to return the array of Error objects to indicate individual failure.
+      properties:
+        Errors:
+          description: Error response array corresponding to Request Object array. In case of single object submission or _search related paths this may be an array of one error element
+          type: array
+          minLength: 1
+          items:
+            $ref: '#/components/schemas/Error'
+      required:
+        - ResponseInfo        
+        
+    Error:
+      type: object
+      description: Error object will be returned as a part of reponse body in conjunction with ResponseInfo as part of ErrorResponse whenever the request processing status in the ResponseInfo is FAILED. HTTP return in this scenario will usually be HTTP 400. 
+      properties:
+        code:
+          type: string
+          description: Error Code will be module specific error label/code to identiffy the error. All modules should also publish the Error codes with their specific localized values in localization service to ensure clients can print locale specific error messages. Example for error code would be User.NotFound to indicate User Not Found by User/Authentication service. All services must declare their possible Error Codes with brief description in the error response section of their API path.
+        message:
+          type: string
+          description: English locale message of the error code. Clients should make a separate call to get the other locale description if configured with the service. Clients may choose to cache these locale specific messages to enhance performance with a reasonable TTL (May be defined by the localization service based on tenant + module combination).
+        description:
+          type: string
+          description: Optional long description of the error to help clients take remedial action. This will not be available as part of localization service.
+        params:
+          type: array
+          description: Some error messages may carry replaceable fields (say $1, $2) to provide more context to the message. E.g. Format related errors may want to indicate the actual field for which the format is invalid. Client's should use the values in the param array to replace those fields. 
+          items: 
+            type: string
+      required:
+        - code
+        - message        
